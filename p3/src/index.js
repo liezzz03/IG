@@ -173,11 +173,12 @@ function init() {
   modelMatrixLoc = gl.getUniformLocation(shaderProgram, "uModelMatrix");
   pointSizeLoc = gl.getUniformLocation(shaderProgram, "uPointSize");
 
-  const gui = new dat.GUI();
+  const gui = new dat.GUI({autoPlace: false});
   gui.add(settings, 'translateX', -1.1, 1.1, 0.01);
   gui.add(settings, 'translateY', -1.1, 1.1, 0.01);
   gui.add(settings, 'rotateZ', -180, 180);
   gui.add(settings, 'zoom', 0.1, 3.0, 0.01);
+  document.getElementById("gui-container").appendChild(gui.domElement);
 
   const canvasRect = canvas.getBoundingClientRect();
   gui.domElement.style.position = "absolute";

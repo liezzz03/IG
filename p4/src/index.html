@@ -3,20 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Práctica 3</title>
+    <title>Práctica 4</title>
     <style>
+      html,
       body {
         margin: 0;
-        padding: 20px;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        min-height: 100vh;
+        height: 100%;
+        overflow: hidden;
         background-color: #222;
         font-family: Arial, sans-serif;
       }
       canvas {
-        border: 2px solid #444;
+        display: block;
+        width: 100vw;
+        height: 100vh;
         background-color: #000;
       }
       .info {
@@ -25,15 +25,26 @@
         left: 20px;
         color: white;
         font-size: 14px;
+        text-shadow: 0 0 4px #000, 0 0 4px #000;
+        pointer-events: none;
+      }
+      .info h3 {
+        margin: 0 0 6px;
+      }
+      .info p {
+        margin: 2px 0;
       }
     </style>
   </head>
   <body>
     <div class="info">
       <h3>Práctica 4</h3>
-      <p>Perspectiva</p>
+      <p id="hud"></p>
+      <p>W/↑ acelerar · S/↓ frenar · A/D o ←/→ girar</p>
+      <p>Arrastrar ratón: mirar · Espacio: disparar</p>
+      <p>F: volar/aterrizar · E/Q: subir/bajar (volando)</p>
     </div>
-    <canvas style="width: 95%" id="my_Canvas" width="400" height="400"></canvas>
+    <canvas id="my_Canvas"></canvas>
 
     <script src="./index.js"></script>
   </body>

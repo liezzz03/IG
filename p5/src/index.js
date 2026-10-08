@@ -8,13 +8,25 @@ precision mediump float;
       in vec3 aCoordinates;
       uniform mat4 uModelMatrix;
       uniform mat4 uViewMatrix;
+      in vec3 aVertexNormals;
 
-      void main(void) {
-        gl_Position = uViewMatrix * uModelMatrix *
-          vec4(aCoordinates, 1.0);
-        //gl_Position.z *= -1.0;
-        gl_PointSize = 10.0;
-      }
+      out vec3 vNormal; 
+      out vec3 vEyeVector; 
+      out vec3 vLightDirection; 
+
+      void main(void) { 
+        // saving vertex after transformations BEFORE PERSPECTIVE 
+        vec4 vertex = uModelMatrix * vec4(aCoordinates, 1.0); 
+        gl_Position = uViewMatrix * vertex; 
+        // compute normal vector 
+        vNormal = vec3(uModelMatrix * vec4(aVertexNormals, 0.0)); 
+        // compute vector from vertex to viewer 
+        vEyeVector = -vertex.xyz; 
+        // compute vector from vertex to light 
+        // vec4 light = vec4(10,10,10,1);
+        vec4 light = uModelMatrix * vec4(10,10,10,1); 
+        vLightDirection = light.xyz - vertex.xyz; 
+      }  
 `;
 
 // Fragment shader source
@@ -24,9 +36,34 @@ precision mediump float;
 out vec4 fragColor;
 uniform vec4 uColor;
 
-void main(void) {
-  fragColor = uColor;
-}
+in vec3 vNormal; 
+in vec3 vEyeVector; 
+in vec3 vLightDirection;
+
+void main(void) { 
+  // computing diffuse component 
+  vec3 N = normalize(vNormal); 
+  vec3 L = normalize(vLightDirection); 
+  vec3 diffuseMaterial = vec3(0,1,0); 
+  float diffuse = max(dot(N, L), 0.0); 
+  vec4 Idif = vec4(diffuse*diffuseMaterial,1); 
+  // compute specular component 
+  float NL = dot(N,L); 
+  vec4 Ispec = vec4(0,0,0,1); 
+  if (NL>0.0) { 
+  vec3 R = 2.0*N*NL-L;   
+  float shininess = 10.0; 
+  vec3 specularMaterial = vec3(1,0,0); 
+  vec3 V = normalize(vEyeVector); 
+  float specular = pow(max(dot(R, V), 0.0), shininess); 
+  Ispec = vec4(specular * specularMaterial, 1); 
+  } 
+  // computing ambient component 
+  vec4 Iamb = vec4(0,0,0.2,1); 
+  // calculamos color final 
+  fragColor = Iamb + Idif + Ispec;  
+  fragColor = min(fragColor, vec4(1,1,1,1)); 
+  } 
 `;
 
 var canvas, gl;
@@ -40,6 +77,9 @@ var rotateX = 0,
 var mouseX, mouseY;
 var zoomFactor = 1;
 var viewMatrixLoc;
+
+var normalsLoc;
+var normal_buffer;
 
 var prevTouchX, prevTouchY;
 
@@ -134,6 +174,8 @@ function init() {
   // create index buffer
   index_buffer = gl.createBuffer();
 
+  normal_buffer = gl.createBuffer();
+
   // Bind vertex buffer object
   gl.bindBuffer(gl.ARRAY_BUFFER, vertex_buffer);
 
@@ -154,6 +196,11 @@ function init() {
 
   modelMatrixLoc = gl.getUniformLocation(shaderProgram, "uModelMatrix");
   viewMatrixLoc = gl.getUniformLocation(shaderProgram, "uViewMatrix");
+  normalsLoc = gl.getAttribLocation(shaderProgram, "aVertexNormals");
+
+  gl.bindBuffer(gl.ARRAY_BUFFER, normal_buffer);
+  gl.vertexAttribPointer(normalsLoc, 3, gl.FLOAT, false, 0, 0);
+  gl.enableVertexAttribArray(normalsLoc);
 }
 
 function render() {
@@ -198,7 +245,7 @@ function render() {
   //renderGround(9, 10);
 
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, index_buffer);
-  renderCube();
+  renderSphere(20);
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
 
   // Unbind the buffer
@@ -221,14 +268,15 @@ function renderCube() {
   gl.bufferData(gl.ARRAY_BUFFER, arrayV, gl.STATIC_DRAW);
 
   // create edges
-  const arrayI = new Uint16Array([
+  /*const arrayI = new Uint16Array([
     0, 1, 1, 2, 2, 3, 3, 0, 4, 5, 5, 6, 6, 7, 7, 4, 0, 4, 1, 5, 2, 6, 3, 7,
   ]);
   gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, arrayI, gl.STATIC_DRAW);
+  
   // draw cube
   gl.uniform4fv(colorLocation, [0, 0, 0, 1]);
   gl.drawElements(gl.LINES, 24, gl.UNSIGNED_SHORT, 0);
-
+*/
   // create faces
   const arrayF = new Uint16Array([
     1,
@@ -272,6 +320,54 @@ function renderCube() {
   // draw cube
   gl.uniform4fv(colorLocation, [0.3, 0.5, 1, 1]);
   gl.drawElements(gl.TRIANGLES, 36, gl.UNSIGNED_SHORT, 0);
+  glPopMatrix();
+}
+
+function renderSphere(n) {
+  glPushMatrix();
+  mat4.scale(modelMatrix, modelMatrix, [0.7, 0.7, 0.7]);
+  gl.uniformMatrix4fv(modelMatrixLoc, false, modelMatrix);
+  // compute vertices
+  const coords = new Float32Array(6 * n * n);
+  const step = Math.PI / n;
+  const R = 1;
+  var k = 0;
+  for (let i = 1; i < n; i++) {
+    const tita = -Math.PI / 2 + i * step;
+    for (let j = 0; j < 2 * n; j++) {
+      const alpha = j * step;
+      coords[k++] = R * Math.cos(tita) * Math.cos(alpha);
+      coords[k++] = R * Math.cos(tita) * Math.sin(alpha);
+      coords[k++] = R * Math.sin(tita);
+    }
+  }
+  // compute faces
+  const arrayIFaces = new Uint16Array((4 * n + 2) * n);
+  var k = 0;
+  for (let i = 0; i < n - 2; i++) {
+    for (let j = 0; j < 2 * n; j++) {
+      arrayIFaces[k++] = 2 * n * (i + 1) + j;
+      arrayIFaces[k++] = 2 * n * i + j;
+    }
+    arrayIFaces[k++] = 2 * n * (i + 1);
+    arrayIFaces[k++] = 2 * n * i;
+  }
+  // compute normals
+  const normals = coords;
+  // pass data to GPU
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertex_buffer);
+  gl.bufferData(gl.ARRAY_BUFFER, coords, gl.STATIC_DRAW);
+  gl.bindBuffer(gl.ARRAY_BUFFER, normal_buffer);
+  gl.bufferData(gl.ARRAY_BUFFER, normals, gl.STATIC_DRAW);
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, arrayIFaces, gl.STATIC_DRAW);
+  // draw meshes
+  for (let i = 0; i < n - 2; i++)
+    gl.drawElements(
+      gl.TRIANGLE_STRIP,
+      4 * n + 2,
+      gl.UNSIGNED_SHORT,
+      2 * i * (4 * n + 2)
+    );
   glPopMatrix();
 }
 

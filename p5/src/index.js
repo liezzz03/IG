@@ -1,5 +1,5 @@
 import * as dat from "dat.gui";
-import { mat4 } from "gl-matrix";
+import { mat4, vec3 } from "gl-matrix";
 
 // Vertex shader source
 const vertexShaderSource = `#version 300 es
@@ -9,6 +9,8 @@ precision mediump float;
       uniform mat4 uModelMatrix;
       uniform mat4 uViewMatrix;
       in vec3 aVertexNormals;
+      // posición de la luz, ya en espacio de cámara
+      uniform vec3 uLightPos;
 
       out vec3 vNormal; 
       out vec3 vEyeVector; 
@@ -23,9 +25,8 @@ precision mediump float;
         // compute vector from vertex to viewer 
         vEyeVector = -vertex.xyz; 
         // compute vector from vertex to light 
-        // vec4 light = vec4(10,10,10,1);
-        vec4 light = uModelMatrix * vec4(10,10,10,1); 
-        vLightDirection = light.xyz - vertex.xyz; 
+        // la luz ahora llega como uniform
+        vLightDirection = uLightPos - vertex.xyz; 
       }  
 `;
 
@@ -36,6 +37,13 @@ precision mediump float;
 out vec4 fragColor;
 uniform vec4 uColor;
 
+// colores y brillo controlados desde la GUI
+uniform vec3 uLightColor;
+uniform vec3 uDifColor;
+uniform vec3 uSpecColor;
+uniform vec3 uAmbColor;
+uniform float uShininess;
+
 in vec3 vNormal; 
 in vec3 vEyeVector; 
 in vec3 vLightDirection;
@@ -44,22 +52,22 @@ void main(void) {
   // computing diffuse component 
   vec3 N = normalize(vNormal); 
   vec3 L = normalize(vLightDirection); 
-  vec3 diffuseMaterial = vec3(0,1,0); 
+  // material difuso y color de luz vienen de uniforms
   float diffuse = max(dot(N, L), 0.0); 
-  vec4 Idif = vec4(diffuse*diffuseMaterial,1); 
+  vec4 Idif = vec4(diffuse*uDifColor*uLightColor,1); 
   // compute specular component 
   float NL = dot(N,L); 
   vec4 Ispec = vec4(0,0,0,1); 
   if (NL>0.0) { 
   vec3 R = 2.0*N*NL-L;   
-  float shininess = 10.0; 
-  vec3 specularMaterial = vec3(1,0,0); 
+  // shininess y material especular vienen de uniforms
   vec3 V = normalize(vEyeVector); 
-  float specular = pow(max(dot(R, V), 0.0), shininess); 
-  Ispec = vec4(specular * specularMaterial, 1); 
+  float specular = pow(max(dot(R, V), 0.0), uShininess); 
+  Ispec = vec4(specular * uSpecColor * uLightColor, 1); 
   } 
   // computing ambient component 
-  vec4 Iamb = vec4(0,0,0.2,1); 
+  // color ambiente desde uniform
+  vec4 Iamb = vec4(uAmbColor,1); 
   // calculamos color final 
   fragColor = Iamb + Idif + Ispec;  
   fragColor = min(fragColor, vec4(1,1,1,1)); 
@@ -82,6 +90,38 @@ var normalsLoc;
 var normal_buffer;
 
 var prevTouchX, prevTouchY;
+
+// locations de los uniforms de iluminación
+var lightPosLoc,
+  lightColorLoc,
+  difColorLoc,
+  specColorLoc,
+  ambColorLoc,
+  shininessLoc;
+
+// parámetros controlados por la GUI
+const controls = {
+  lightX: 10,
+  lightY: 10,
+  lightZ: 10,
+  lightAttached: true, // true: la luz sigue las rotaciones del ratón; false: fija
+  lightColor: "#ffffff",
+  difColor: "#00ff00",
+  specColor: "#ff0000",
+  ambColor: "#000033",
+  shininess: 10,
+};
+
+// convierte "#rrggbb" a [r, g, b] entre 0 y 1
+function hexToRgb(hex) {
+  // elimina el signo "#" si está presente
+  hex = hex.replace(/^#/, "");
+  return [
+    parseInt(hex.substring(0, 2), 16) / 255,
+    parseInt(hex.substring(2, 4), 16) / 255,
+    parseInt(hex.substring(4, 6), 16) / 255,
+  ];
+}
 
 /*var settings = {
   translateX: 0.0,
@@ -201,6 +241,28 @@ function init() {
   gl.bindBuffer(gl.ARRAY_BUFFER, normal_buffer);
   gl.vertexAttribPointer(normalsLoc, 3, gl.FLOAT, false, 0, 0);
   gl.enableVertexAttribArray(normalsLoc);
+
+  // locations de los uniforms de iluminación
+  lightPosLoc = gl.getUniformLocation(shaderProgram, "uLightPos");
+  lightColorLoc = gl.getUniformLocation(shaderProgram, "uLightColor");
+  difColorLoc = gl.getUniformLocation(shaderProgram, "uDifColor");
+  specColorLoc = gl.getUniformLocation(shaderProgram, "uSpecColor");
+  ambColorLoc = gl.getUniformLocation(shaderProgram, "uAmbColor");
+  shininessLoc = gl.getUniformLocation(shaderProgram, "uShininess");
+
+  // GUI de dat.gui
+  const gui = new dat.GUI();
+  const fLight = gui.addFolder("Luz");
+  fLight.add(controls, "lightX", -20, 20, 0.1);
+  fLight.add(controls, "lightY", -20, 20, 0.1);
+  fLight.add(controls, "lightZ", -20, 20, 0.1);
+  fLight.add(controls, "lightAttached").name("anclada al objeto");
+  fLight.addColor(controls, "lightColor");
+  const fMat = gui.addFolder("Material");
+  fMat.addColor(controls, "difColor");
+  fMat.addColor(controls, "specColor");
+  fMat.addColor(controls, "ambColor");
+  fMat.add(controls, "shininess", 1, 200, 1);
 }
 
 function render() {
@@ -236,11 +298,28 @@ function render() {
   const eye = [0, 0, 3];
   const center = [0, 0, 0];
   mat4.lookAt(modelMatrix, eye, center, [0, 1, 0]);
+  // guardamos solo la cámara (sin rotación ni zoom) para la luz fija
+  const cameraMatrix = mat4.clone(modelMatrix);
 
   // mouse transformations
   mat4.scale(modelMatrix, modelMatrix, [zoomFactor, zoomFactor, zoomFactor]);
   mat4.rotateX(modelMatrix, modelMatrix, rotateX);
   mat4.rotateY(modelMatrix, modelMatrix, rotateY);
+
+  // luz anclada (sigue las rotaciones del ratón) o fija (solo cámara)
+  const lightEye = vec3.create();
+  vec3.transformMat4(
+    lightEye,
+    [controls.lightX, controls.lightY, controls.lightZ],
+    controls.lightAttached ? modelMatrix : cameraMatrix
+  );
+  gl.uniform3fv(lightPosLoc, lightEye);
+  gl.uniform3fv(lightColorLoc, hexToRgb(controls.lightColor));
+  gl.uniform3fv(difColorLoc, hexToRgb(controls.difColor));
+  gl.uniform3fv(specColorLoc, hexToRgb(controls.specColor));
+  gl.uniform3fv(ambColorLoc, hexToRgb(controls.ambColor));
+  gl.uniform1f(shininessLoc, controls.shininess);
+
   // drawGround
   //renderGround(9, 10);
 

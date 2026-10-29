@@ -60,4 +60,4 @@ Radios, distancias y velocidades **no son reales**; se ajustan para que todo se 
 - Texturas: **Solar System Scope**, <https://www.solarsystemscope.com/textures/> (licencia CC BY 4.0). Las de los planetas enanos son las versiones "fictional" que ofrece la web, es decir, representaciones artísticas.
 - Datos de las fichas (diámetros, períodos, curiosidades): NASA Solar System Exploration, <https://science.nasa.gov/solar-system/>
 - Generador pseudoaleatorio con semilla `mulberry32` (algoritmo público).
-- Uso de la IA para elegir el tamaño, órbita y velocidad para las fichas didácticas.
+- Uso de la IA para elegir el tamaño, órbita y velocidad.

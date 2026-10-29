@@ -5,7 +5,7 @@ import GUI from "lil-gui";
 const AUTOR = "Paula Lijun Nuez Hernández";
 const TEXDIR = "src/textures/";
 
-// datos de los astros (info que se ve)
+// datos de los astros (info que se ve en la esquina baja izquierda)
 const SOL = {
   name: "Sol",
   radius: 3,
@@ -41,7 +41,7 @@ const PLANETAS = [
     name: "Venus",
     tipo: "gas",
     colores: ["#e6c27a", "#c9a15a", "#f0d9a0"],
-    archivos: { map: TEXDIR + "2k_venus_atmosphere.jpg" }, // o 2k_venus_surface.jpg para ver el suelo
+    archivos: { map: TEXDIR + "2k_venus_atmosphere.jpg" },
     radius: 0.7,
     dist: 9,
     f1: 1,
